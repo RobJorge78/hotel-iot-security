@@ -164,3 +164,194 @@ The CI workflow:
 ## Current Scope
 
 This project is a local development and demonstration system using simulated hotel IoT events. It is not intended to represent a production-deployed hotel security platform.
+
+
+## Local Setup
+
+This project runs locally using Docker, Java 21, Maven, Python, and PostgreSQL.
+
+### Prerequisites
+
+Install the following tools:
+
+- Docker Desktop
+- Java 21
+- Python 3
+- Git
+
+The Java services include Maven Wrapper scripts, so a separate Maven installation is not required.
+
+### 1. Clone the Repository
+
+```powershell
+git clone https://github.com/RobJorge78/hotel-iot-security.git
+cd hotel-iot-security
+```
+
+### 2. Start the MQTT Broker
+
+The MQTT broker uses Eclipse Mosquitto 2 and listens on port 1883.
+
+```powershell
+docker run -d --name hotel-mqtt `
+  -p 127.0.0.1:1883:1883 `
+  -v "${PWD}/mosquitto/config:/mosquitto/config:ro" `
+  eclipse-mosquitto:2
+```
+
+The broker uses the configuration in `mosquitto/config/mosquitto.conf`.
+
+**Security note:** Anonymous MQTT connections are enabled for local development only. Production deployments should use authentication, TLS encryption, and network access controls.
+
+### 3. Start PostgreSQL
+
+Create a persistent Docker volume:
+
+```powershell
+docker volume create hotel-postgres-data
+```
+
+Create the PostgreSQL container:
+
+```powershell
+docker run -d --name hotel-postgres `
+  -p 127.0.0.1:5432:5432 `
+  -e POSTGRES_DB=hotelsecurity `
+  -e POSTGRES_USER=hoteluser `
+  -e POSTGRES_PASSWORD=YOUR_PASSWORD `
+  -v hotel-postgres-data:/var/lib/postgresql/data `
+  postgres:17
+```
+
+Replace `YOUR_PASSWORD` with a password of your choice.
+
+The Docker volume preserves database data between container restarts.
+
+**Note:** These commands create new containers. If the containers already exist, start them instead:
+
+```powershell
+docker start hotel-mqtt hotel-postgres
+```
+
+### 4. Configure the Database Password
+
+Both Java services connect to PostgreSQL using the `DB_PASSWORD` environment variable.
+
+In PowerShell, set it to the password you chose when creating the PostgreSQL container:
+
+```powershell
+$env:DB_PASSWORD = "YOUR_PASSWORD"
+```
+
+Replace `YOUR_PASSWORD` with your actual local database password.
+
+Set this variable in each PowerShell terminal used to run a Java service.
+
+Do not commit passwords or other credentials to GitHub.
+
+### 5. Start the Event Processor
+
+Open a new PowerShell terminal in the project root.
+
+Set `DB_PASSWORD` as described above, then run:
+
+```powershell
+cd event-processor
+.\mvnw.cmd spring-boot:run
+```
+
+The event processor runs on port `8080`.
+
+It subscribes to the MQTT topic `hotel/security/events`, stores incoming security events in PostgreSQL, and generates alerts when suspicious patterns are detected.
+
+Keep this terminal running.
+
+### 6. Start the Security API
+
+Open another PowerShell terminal in the project root.
+
+Set `DB_PASSWORD` as described above, then run:
+
+```powershell
+cd security-api
+.\mvnw.cmd spring-boot:run
+```
+
+The Security API runs on port `8081`.
+
+Once started, you can access these endpoints in your browser:
+
+- `http://localhost:8081/api/events`
+- `http://localhost:8081/api/alerts`
+
+Both endpoints support pagination. Events can be filtered by event type, and alerts can be filtered by severity.
+
+### 7. Start the Python Simulator
+
+Open another PowerShell terminal in the project root.
+
+Install the MQTT Python library:
+
+```powershell
+python -m pip install paho-mqtt
+```
+
+Start the simulator:
+
+```powershell
+cd simulator
+python simulator.py
+```
+
+The simulator publishes security events to the MQTT topic:
+
+`hotel/security/events`
+
+Supported simulated events include:
+
+- `LOGIN_SUCCESS`
+- `LOGIN_FAILED`
+- `DEVICE_CONNECTED`
+- `DEVICE_DISCONNECTED`
+
+The event processor receives these events and stores them in PostgreSQL.
+
+When suspicious patterns are detected, the event processor generates security alerts.
+
+### 8. View Security Events and Alerts
+
+With the Docker containers, Java services, and Python simulator running, open the following URLs in your browser:
+
+**All security events:**
+
+`http://localhost:8081/api/events`
+
+**All security alerts:**
+
+`http://localhost:8081/api/alerts`
+
+**Failed login events:**
+
+`http://localhost:8081/api/events?eventType=LOGIN_FAILED`
+
+**High-severity alerts:**
+
+`http://localhost:8081/api/alerts?severity=HIGH`
+
+**Paginated events:**
+
+`http://localhost:8081/api/events?page=0&size=10`
+
+The API returns JSON responses.
+
+### 9. Stop the Application
+
+Stop the Python simulator and Java services by pressing `Ctrl + C` in their respective terminals.
+
+Stop the Docker containers using:
+
+```powershell
+docker stop hotel-postgres hotel-mqtt
+```
+
+The PostgreSQL Docker volume preserves stored security events and alerts between restarts.
