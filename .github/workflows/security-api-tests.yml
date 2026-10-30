@@ -13,13 +13,13 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: hotelsecurity
+          POSTGRES_DB: hotelsecurity_test
           POSTGRES_USER: hoteluser
           POSTGRES_PASSWORD: testpassword
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U hoteluser -d hotelsecurity"
+          --health-cmd "pg_isready -U hoteluser -d hotelsecurity_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -43,4 +43,5 @@ jobs:
       - name: Run automated tests
         env:
           DB_PASSWORD: testpassword
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/hotelsecurity_test
         run: bash ./mvnw test
